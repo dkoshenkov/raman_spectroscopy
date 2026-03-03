@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DeepPick Medical-Tech Design System */
+
+@layer base {
+  :root {
+    /* Core surfaces */
+    --background: 220 35% 6%;
+    --foreground: 210 30% 94%;
+
+    --card: 220 32% 10%;
+    --card-foreground: 210 30% 94%;
+
+    --popover: 220 32% 10%;
+    --popover-foreground: 210 30% 94%;
+
+    /* Primary: teal/cyan */
+    --primary: 175 80% 42%;
+    --primary-foreground: 220 35% 6%;
+
+    /* Secondary: navy */
+    --secondary: 220 28% 16%;
+    --secondary-foreground: 210 30% 80%;
+
+    --muted: 220 25% 14%;
+    --muted-foreground: 215 20% 52%;
+
+    --accent: 175 80% 42%;
+    --accent-foreground: 220 35% 6%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 22% 18%;
+    --input: 220 25% 14%;
+    --ring: 175 80% 42%;
+
+    --radius: 0.6rem;
+
+    /* Custom DeepPick tokens */
+    --teal: 175 80% 42%;
+    --teal-glow: 175 80% 55%;
+    --teal-dim: 175 50% 30%;
+    --navy: 220 35% 6%;
+    --navy-card: 220 32% 10%;
+    --navy-border: 220 22% 18%;
+    --amber-warn: 38 90% 55%;
+    --green-pos: 142 65% 45%;
+    --red-neg: 0 70% 55%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(220 35% 6%) 0%, hsl(220 40% 9%) 50%, hsl(195 45% 8%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(220 32% 11%) 0%, hsl(220 28% 9%) 100%);
+    --gradient-teal: linear-gradient(135deg, hsl(175 80% 42%) 0%, hsl(185 75% 52%) 100%);
+    --shadow-teal: 0 0 24px -4px hsl(175 80% 42% / 0.35);
+    --shadow-card: 0 4px 24px -8px hsl(220 50% 4% / 0.6);
+
+    --sidebar-background: 220 35% 6%;
+    --sidebar-foreground: 210 30% 80%;
+    --sidebar-primary: 175 80% 42%;
+    --sidebar-primary-foreground: 220 35% 6%;
+    --sidebar-accent: 220 28% 16%;
+    --sidebar-accent-foreground: 210 30% 94%;
+    --sidebar-border: 220 22% 18%;
+    --sidebar-ring: 175 80% 42%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    background: hsl(var(--background));
+  }
+
+  /* Range slider styling */
+  input[type="range"] {
+    accent-color: hsl(var(--teal));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: hsl(var(--teal));
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 0 0 1px hsl(var(--teal) / 0.4), var(--shadow-teal);
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 0 4px hsl(var(--teal) / 0.25), var(--shadow-teal);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: hsl(var(--teal));
+    border: 2px solid hsl(var(--background));
+    cursor: pointer;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+  }
+
+  .font-mono, .tabular-nums, code {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .card-surface {
+    background: var(--gradient-card);
+    border: 1px solid hsl(var(--navy-border));
+    box-shadow: var(--shadow-card);
+  }
+
+  .teal-glow {
+    box-shadow: var(--shadow-teal);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(hsl(var(--navy-border) / 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--navy-border) / 0.4) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .badge-cls-1 {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-semibold;
+    background: hsl(var(--red-neg) / 0.15);
+    color: hsl(var(--red-neg));
+    border: 1px solid hsl(var(--red-neg) / 0.3);
+  }
+
+  .badge-cls-0 {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-semibold;
+    background: hsl(var(--green-pos) / 0.15);
+    color: hsl(var(--green-pos));
+    border: 1px solid hsl(var(--green-pos) / 0.3);
+  }
+}

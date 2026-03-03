@@ -1,0 +1,26 @@
+services:
+  backend:
+    container_name: deeppick-backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_NAME: Example Async API
+      APP_VERSION: 0.1.0
+      PORT: 8000
+      WEB_THREADS: 2
+      WEB_CONCURRENCY: 1
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  nginx:
+    container_name: deeppick-nginx
+    build:
+      context: .
+      dockerfile: infra/nginx/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
