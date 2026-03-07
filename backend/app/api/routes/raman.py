@@ -5,13 +5,16 @@ from fastapi import APIRouter, File, UploadFile
 from app.core.errors import ApiError
 from app.schemas.raman import (
     RamanMetadataConfirmRequest,
+    RamanPredictionResponse,
     RamanSpectrumResponse,
     RamanUploadResponse,
     serialize_metadata,
+    serialize_prediction,
     serialize_point,
     serialize_upload,
 )
 from app.services.raman import parse_raman_upload, upload_store
+from app.services.raman.ml import classify_raman_point
 
 router = APIRouter(tags=["raman"])
 
@@ -74,3 +77,25 @@ def get_spectrum(upload_id: str, point_key: str) -> RamanSpectrumResponse:
         metadata=serialize_metadata(upload),
         point=serialize_point(point),
     )
+
+
+@router.get("/raman/uploads/{upload_id}/predict", response_model=RamanPredictionResponse)
+def predict_spectrum(upload_id: str, point_key: str) -> RamanPredictionResponse:
+    upload = upload_store.get(upload_id)
+    if upload is None:
+        raise ApiError(status_code=404, code="NOT_FOUND", message="сессия загрузки не найдена")
+    if upload.raman_map is None:
+        raise ApiError(status_code=409, code="INVALID_STATE", message="для этой загрузки спектр недоступен")
+    if not upload.metadata.user_confirmed:
+        raise ApiError(
+            status_code=409,
+            code="METADATA_NOT_CONFIRMED",
+            message="Перед ML-классификацией нужно подтвердить метаданные файла.",
+        )
+
+    point = next((item for item in upload.raman_map.points if item.point_key == point_key), None)
+    if point is None:
+        raise ApiError(status_code=404, code="NOT_FOUND", message="точка спектра не найдена")
+
+    prediction = classify_raman_point(upload, point)
+    return serialize_prediction(upload.upload_id, point.point_key, prediction)

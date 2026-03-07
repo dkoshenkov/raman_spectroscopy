@@ -10,9 +10,10 @@ import {
   buildSpectrumPlotRows,
 } from "@/lib/spectra";
 import { SpectrumChart } from "@/components/spectra/SpectrumChart";
+import { RamanPredictionPanel } from "@/components/spectra/RamanPredictionPanel";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import type { RamanMetadata } from "@/lib/raman/api";
+import { predictRamanSpectrum, type RamanMetadata, type RamanPrediction } from "@/lib/raman/api";
 import {
   formatBand,
   formatBrainRegion,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/raman/labels";
 
 interface SingleSpectrumViewerProps {
+  uploadId: string;
   dataset: SpectraDataset;
   fileName: string;
   metadata?: RamanMetadata;
@@ -37,7 +39,7 @@ function downloadCsv(fileName: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export const SingleSpectrumViewer: React.FC<SingleSpectrumViewerProps> = ({ dataset, fileName, metadata }) => {
+export const SingleSpectrumViewer: React.FC<SingleSpectrumViewerProps> = ({ uploadId, dataset, fileName, metadata }) => {
   const spectrum = dataset.spectra[0] ?? null;
   const [viewMode, setViewMode] = React.useState<ViewMode>("processed");
   const [preprocessing, setPreprocessing] = React.useState<PreprocessingOptions>(DEFAULT_PREPROCESSING);
@@ -55,6 +57,9 @@ export const SingleSpectrumViewer: React.FC<SingleSpectrumViewerProps> = ({ data
   );
 
   const [waveWindow, setWaveWindow] = React.useState<[number, number]>([0, 1]);
+  const [prediction, setPrediction] = React.useState<RamanPrediction | null>(null);
+  const [predictionLoading, setPredictionLoading] = React.useState(false);
+  const [predictionError, setPredictionError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!plotRows.length) {
@@ -63,6 +68,41 @@ export const SingleSpectrumViewer: React.FC<SingleSpectrumViewerProps> = ({ data
     }
     setWaveWindow([plotRows[0].wave, plotRows[plotRows.length - 1].wave]);
   }, [plotRows]);
+
+  React.useEffect(() => {
+    if (!spectrum) {
+      setPrediction(null);
+      setPredictionLoading(false);
+      setPredictionError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPredictionLoading(true);
+    setPredictionError(null);
+
+    predictRamanSpectrum(uploadId, spectrum.key)
+      .then((result) => {
+        if (!cancelled) {
+          setPrediction(result);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPrediction(null);
+          setPredictionError(error instanceof Error ? error.message : "Не удалось классифицировать спектр.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPredictionLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [spectrum, uploadId]);
 
   const toggleRegion = React.useCallback((regionId: string, checked: boolean) => {
     setVisibleRegionIds((current) => {
@@ -252,6 +292,12 @@ export const SingleSpectrumViewer: React.FC<SingleSpectrumViewerProps> = ({ data
             </div>
           </div>
 
+          <RamanPredictionPanel
+            prediction={prediction}
+            loading={predictionLoading}
+            error={predictionError}
+          />
+
           <SpectrumChart
             rows={plotRows}
             selectedSpectra={[spectrum]}
@@ -260,6 +306,12 @@ export const SingleSpectrumViewer: React.FC<SingleSpectrumViewerProps> = ({ data
             showAggregate={false}
             waveWindow={waveWindow}
             onWaveWindowChange={setWaveWindow}
+            importantRegions={viewMode === "processed" ? prediction?.importantRegions : []}
+            peaks={
+              viewMode === "processed"
+                ? prediction?.peaks.map((item) => ({ peakNu: item.peakNu, intensity: item.intensity }))
+                : []
+            }
           />
 
           <div className="card-surface rounded-xl p-4">

@@ -87,6 +87,47 @@ class RamanSpectrumResponse(BaseModel):
     point: RamanPointResponse
 
 
+class RamanClassProbabilityResponse(BaseModel):
+    label: str
+    probability: float
+
+
+class RamanPeakResponse(BaseModel):
+    peakIdx: int
+    peakNu: float
+    intensity: float
+    prominence: float
+
+
+class RamanImportantRegionResponse(BaseModel):
+    startIdx: int
+    endIdx: int
+    startNu: float
+    endNu: float
+    peakIdx: int
+    peakNu: float
+    scoreSum: float
+    scoreMax: float
+
+
+class RamanSeriesResponse(BaseModel):
+    x: list[float]
+    y: list[float]
+    label: str
+
+
+class RamanPredictionResponse(BaseModel):
+    uploadId: str
+    pointKey: str
+    predictedClass: str
+    predictedClassId: int
+    probabilities: list[RamanClassProbabilityResponse]
+    processedSpectrum: RamanSeriesResponse
+    attribution: RamanSeriesResponse | None = None
+    peaks: list[RamanPeakResponse]
+    importantRegions: list[RamanImportantRegionResponse]
+
+
 def serialize_diagnostic(diagnostic: Diagnostic) -> DiagnosticResponse:
     return DiagnosticResponse(
         code=diagnostic.code,
@@ -151,4 +192,62 @@ def serialize_upload(upload: ParsedUpload) -> RamanUploadResponse:
         fileName=upload.file_name,
         metadata=serialize_metadata(upload),
         ramanMap=serialize_raman_map(upload.raman_map) if upload.raman_map else None,
+    )
+
+
+def serialize_prediction(upload_id: str, point_key: str, prediction: dict) -> RamanPredictionResponse:
+    probabilities = [
+        RamanClassProbabilityResponse(label=label, probability=float(probability))
+        for label, probability in sorted(
+            prediction["class_probs"].items(),
+            key=lambda item: float(item[1]),
+            reverse=True,
+        )
+    ]
+    peaks = [
+        RamanPeakResponse(
+            peakIdx=int(item["peak_idx"]),
+            peakNu=float(item["peak_nu"]),
+            intensity=float(item["intensity"]),
+            prominence=float(item["prominence"]),
+        )
+        for item in prediction["visualization"]["peaks"]
+    ]
+    important_regions = [
+        RamanImportantRegionResponse(
+            startIdx=int(item["start_idx"]),
+            endIdx=int(item["end_idx"]),
+            startNu=float(item["start_nu"]),
+            endNu=float(item["end_nu"]),
+            peakIdx=int(item["peak_idx"]),
+            peakNu=float(item["peak_nu"]),
+            scoreSum=float(item["score_sum"]),
+            scoreMax=float(item["score_max"]),
+        )
+        for item in prediction["visualization"]["important_regions"]
+    ]
+    attribution = prediction["visualization"].get("attribution")
+
+    return RamanPredictionResponse(
+        uploadId=upload_id,
+        pointKey=point_key,
+        predictedClass=prediction["pred_class_name"],
+        predictedClassId=int(prediction["pred_class_id"]),
+        probabilities=probabilities,
+        processedSpectrum=RamanSeriesResponse(
+            x=[float(value) for value in prediction["visualization"]["spectrum"]["x"]],
+            y=[float(value) for value in prediction["visualization"]["spectrum"]["y"]],
+            label=str(prediction["visualization"]["spectrum"]["label"]),
+        ),
+        attribution=(
+            RamanSeriesResponse(
+                x=[float(value) for value in attribution["x"]],
+                y=[float(value) for value in attribution["y"]],
+                label=str(attribution["label"]),
+            )
+            if attribution
+            else None
+        ),
+        peaks=peaks,
+        importantRegions=important_regions,
     )

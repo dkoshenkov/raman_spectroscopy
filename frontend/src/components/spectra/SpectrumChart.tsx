@@ -5,6 +5,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceDot,
   ReferenceArea,
   ResponsiveContainer,
   Tooltip,
@@ -28,6 +29,15 @@ interface SpectrumChartProps {
   showAggregate: boolean;
   waveWindow: [number, number];
   onWaveWindowChange: (next: [number, number]) => void;
+  importantRegions?: Array<{
+    startNu: number;
+    endNu: number;
+    peakNu: number;
+  }>;
+  peaks?: Array<{
+    peakNu: number;
+    intensity: number;
+  }>;
 }
 
 const SPECTRUM_COLORS = [
@@ -73,6 +83,8 @@ export const SpectrumChart: React.FC<SpectrumChartProps> = ({
   showAggregate,
   waveWindow,
   onWaveWindowChange,
+  importantRegions = [],
+  peaks = [],
 }) => {
   const fullDomain = React.useMemo<[number, number]>(() => {
     if (rows.length === 0) {
@@ -214,6 +226,16 @@ export const SpectrumChart: React.FC<SpectrumChartProps> = ({
                   strokeOpacity={0}
                 />
               ))}
+            {importantRegions.map((region, index) => (
+              <ReferenceArea
+                key={`ml-region-${index}-${region.startNu}`}
+                x1={region.startNu}
+                x2={region.endNu}
+                fill="rgba(239, 68, 68, 0.16)"
+                stroke="rgba(239, 68, 68, 0.35)"
+                strokeOpacity={1}
+              />
+            ))}
             <XAxis
               dataKey="wave"
               type="number"
@@ -281,6 +303,18 @@ export const SpectrumChart: React.FC<SpectrumChartProps> = ({
                 strokeWidth={index === 0 ? 2.4 : 1.8}
                 dot={false}
                 isAnimationActive={false}
+              />
+            ))}
+            {peaks.map((peak, index) => (
+              <ReferenceDot
+                key={`peak-${index}-${peak.peakNu}`}
+                x={peak.peakNu}
+                y={peak.intensity}
+                r={4}
+                fill="#f97316"
+                stroke="#fff7ed"
+                strokeWidth={1.5}
+                ifOverflow="visible"
               />
             ))}
           </LineChart>

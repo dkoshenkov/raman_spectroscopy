@@ -147,12 +147,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
               />
             ) : ramanUpload.ramanMap?.dataMode === "single_spectrum" && spectraDataset ? (
               <SingleSpectrumViewer
+                uploadId={ramanUpload.uploadId}
                 dataset={spectraDataset}
                 fileName={ramanUpload.fileName}
                 metadata={ramanUpload.metadata}
               />
             ) : spectraDataset ? (
               <SpectraExplorer
+                uploadId={ramanUpload.uploadId}
                 dataset={spectraDataset}
                 fileName={ramanUpload.fileName}
                 metadata={ramanUpload.metadata}

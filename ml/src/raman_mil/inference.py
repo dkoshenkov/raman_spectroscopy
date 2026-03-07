@@ -71,9 +71,47 @@ def preprocess_single_spectrum_file(
     }
 
 
+def preprocess_single_spectrum_arrays(
+    wave: np.ndarray,
+    intensity: np.ndarray,
+    common_nu: np.ndarray,
+    preprocess_mode: str,
+    preprocess_kwargs: dict[str, Any] | None = None,
+) -> dict[str, np.ndarray]:
+    raw_nu = np.asarray(wave, dtype=np.float32).reshape(-1)
+    raw_intensity = np.asarray(intensity, dtype=np.float32).reshape(-1)
+    if raw_nu.shape[0] != raw_intensity.shape[0]:
+        raise ValueError("wave and intensity must have the same length")
+    if raw_nu.shape[0] < 2:
+        raise ValueError("Spectrum must contain at least 2 points")
+
+    order = np.argsort(raw_nu)
+    raw_nu = raw_nu[order]
+    raw_intensity = raw_intensity[order]
+    overlap_left = max(float(raw_nu.min()), float(common_nu.min()))
+    overlap_right = min(float(raw_nu.max()), float(common_nu.max()))
+    if overlap_right <= overlap_left:
+        raise ValueError(
+            "Input spectrum range does not overlap model common_nu range. "
+            f"input=[{float(raw_nu.min()):.3f}, {float(raw_nu.max()):.3f}], "
+            f"model=[{float(common_nu.min()):.3f}, {float(common_nu.max()):.3f}]"
+        )
+    resampled = np.interp(common_nu, raw_nu, raw_intensity).astype(np.float32)
+    processed = preprocess_spectrum(resampled, **(preprocess_kwargs or {}))
+    if preprocess_mode not in processed:
+        raise ValueError(f"Unknown preprocess_mode={preprocess_mode!r}")
+    return {
+        "raw_nu": raw_nu,
+        "raw_intensity": raw_intensity,
+        "resampled_intensity": resampled,
+        "processed_spectrum": processed[preprocess_mode].astype(np.float32),
+    }
+
+
 def ensemble_predict_spectrum(
     loaded_models: list[tuple[Path, RamanMILModel, dict[str, Any]]],
     spectrum: np.ndarray,
+    tissue_id: int | None = None,
     device: str | torch.device | None = None,
 ) -> dict[str, Any]:
     if not loaded_models:
@@ -83,7 +121,7 @@ def ensemble_predict_spectrum(
     for checkpoint_path, model, checkpoint in loaded_models:
         if device is not None:
             model = model.to(device)
-        pred = predict_spectrum(model, spectrum, device=device)
+        pred = predict_spectrum(model, spectrum, tissue_id=tissue_id, device=device)
         per_fold.append(
             {
                 "checkpoint_path": str(checkpoint_path),
@@ -110,6 +148,7 @@ def ensemble_explain_spectrum(
     loaded_models: list[tuple[Path, RamanMILModel, dict[str, Any]]],
     spectrum: np.ndarray,
     common_nu: np.ndarray,
+    tissue_id: int | None = None,
     target_class: int | None = None,
     steps: int = 64,
     device: str | torch.device | None = None,
@@ -118,7 +157,7 @@ def ensemble_explain_spectrum(
         raise ValueError("loaded_models must not be empty")
 
     if target_class is None:
-        pred = ensemble_predict_spectrum(loaded_models, spectrum, device=device)
+        pred = ensemble_predict_spectrum(loaded_models, spectrum, tissue_id=tissue_id, device=device)
         target_class = int(pred["pred_class"])
 
     fold_items = []
@@ -129,6 +168,7 @@ def ensemble_explain_spectrum(
             model=model,
             spectrum=spectrum,
             common_nu=common_nu,
+            tissue_id=tissue_id,
             target_class=target_class,
             steps=steps,
             device=device,
@@ -196,6 +236,7 @@ def infer_single_spectrum_file(
     spectrum_path: str | Path,
     center: int,
     model_dir: str | Path | None = None,
+    tissue_id: int | None = None,
     device: str | torch.device = "cpu",
     explain: bool = True,
     ig_steps: int = 64,
@@ -221,6 +262,7 @@ def infer_single_spectrum_file(
     prediction = ensemble_predict_spectrum(
         loaded_models=loaded_models,
         spectrum=prepared["processed_spectrum"],
+        tissue_id=tissue_id,
         device=device,
     )
 
@@ -248,6 +290,7 @@ def infer_single_spectrum_file(
             loaded_models=loaded_models,
             spectrum=prepared["processed_spectrum"],
             common_nu=common_nu,
+            tissue_id=tissue_id,
             target_class=int(prediction["pred_class"]),
             steps=ig_steps,
             device=device,
@@ -266,6 +309,108 @@ def infer_single_spectrum_file(
         "visualization": visualization,
         "source": {
             "spectrum_path": str(Path(spectrum_path).resolve()),
+            "center": int(center),
+            "model_dir": str(resolved_model_dir.resolve()),
+            "preprocess_mode": preprocess_mode,
+            "preprocess_kwargs": preprocess_kwargs,
+        },
+        "debug": {
+            "per_fold": prediction["per_fold"],
+            "raw_spectrum": {
+                "x": prepared["raw_nu"].astype(np.float32),
+                "y": prepared["raw_intensity"].astype(np.float32),
+                "label": "raw_spectrum",
+            },
+            "resampled_spectrum": {
+                "x": common_nu.astype(np.float32),
+                "y": prepared["resampled_intensity"].astype(np.float32),
+                "label": "resampled_spectrum",
+            },
+            "explanation": explanation,
+        },
+    }
+
+
+def infer_single_spectrum_arrays(
+    wave: np.ndarray,
+    intensity: np.ndarray,
+    center: int,
+    model_dir: str | Path | None = None,
+    tissue_id: int | None = None,
+    device: str | torch.device = "cpu",
+    explain: bool = True,
+    ig_steps: int = 64,
+    peak_top_n: int = 10,
+    source_name: str = "inline_spectrum",
+) -> dict[str, Any]:
+    if center not in DEFAULT_MODEL_DIRS and model_dir is None:
+        raise ValueError(f"Unsupported center={center}. Expected one of {sorted(DEFAULT_MODEL_DIRS)}")
+
+    resolved_model_dir = Path(model_dir) if model_dir is not None else DEFAULT_MODEL_DIRS[int(center)]
+    loaded_models = load_fold_checkpoints(resolved_model_dir, map_location=device)
+
+    first_checkpoint = loaded_models[0][2]
+    common_nu = np.asarray(first_checkpoint["common_nu"], dtype=np.float32)
+    preprocess_mode = str(first_checkpoint["preprocess_mode"])
+    preprocess_kwargs = dict(first_checkpoint.get("preprocess_kwargs", {}))
+
+    prepared = preprocess_single_spectrum_arrays(
+        wave=wave,
+        intensity=intensity,
+        common_nu=common_nu,
+        preprocess_mode=preprocess_mode,
+        preprocess_kwargs=preprocess_kwargs,
+    )
+    prediction = ensemble_predict_spectrum(
+        loaded_models=loaded_models,
+        spectrum=prepared["processed_spectrum"],
+        tissue_id=tissue_id,
+        device=device,
+    )
+
+    class_probs = {
+        id2target[idx]: float(prob)
+        for idx, prob in enumerate(np.asarray(prediction["mean_probs"], dtype=np.float32))
+    }
+    visualization: dict[str, Any] = {
+        "spectrum": {
+            "x": common_nu.astype(np.float32),
+            "y": prepared["processed_spectrum"].astype(np.float32),
+            "label": "processed_spectrum",
+        },
+        "peaks": extract_spectrum_peaks(
+            common_nu=common_nu,
+            spectrum=prepared["processed_spectrum"],
+            top_n=peak_top_n,
+        ),
+        "important_regions": [],
+    }
+
+    explanation = None
+    if explain:
+        explanation = ensemble_explain_spectrum(
+            loaded_models=loaded_models,
+            spectrum=prepared["processed_spectrum"],
+            common_nu=common_nu,
+            tissue_id=tissue_id,
+            target_class=int(prediction["pred_class"]),
+            steps=ig_steps,
+            device=device,
+        )
+        visualization["important_regions"] = explanation["intervals"]
+        visualization["attribution"] = {
+            "x": common_nu.astype(np.float32),
+            "y": np.asarray(explanation["attribution"], dtype=np.float32),
+            "label": f"integrated_gradients_{explanation['target_name']}",
+        }
+
+    return {
+        "pred_class_id": int(prediction["pred_class"]),
+        "pred_class_name": prediction["pred_label"],
+        "class_probs": class_probs,
+        "visualization": visualization,
+        "source": {
+            "spectrum_path": source_name,
             "center": int(center),
             "model_dir": str(resolved_model_dir.resolve()),
             "preprocess_mode": preprocess_mode,

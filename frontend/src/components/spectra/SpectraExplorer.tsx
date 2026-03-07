@@ -12,11 +12,12 @@ import {
   buildSpectrumPlotRows,
 } from "@/lib/spectra";
 import { CoordinateMap } from "@/components/spectra/CoordinateMap";
+import { RamanPredictionPanel } from "@/components/spectra/RamanPredictionPanel";
 import { SpectrumChart } from "@/components/spectra/SpectrumChart";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import type { RamanMetadata } from "@/lib/raman/api";
+import { predictRamanSpectrum, type RamanMetadata, type RamanPrediction } from "@/lib/raman/api";
 import {
   formatBand,
   formatBrainRegion,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/raman/labels";
 
 interface SpectraExplorerProps {
+  uploadId: string;
   dataset: SpectraDataset;
   fileName: string;
   metadata?: RamanMetadata;
@@ -91,7 +93,7 @@ function useSelectedSpectra(dataset: SpectraDataset) {
   };
 }
 
-export const SpectraExplorer: React.FC<SpectraExplorerProps> = ({ dataset, fileName, metadata }) => {
+export const SpectraExplorer: React.FC<SpectraExplorerProps> = ({ uploadId, dataset, fileName, metadata }) => {
   const { selectedKey, overlayKeys, orderedSelection, toggleOverlayKey, selectOnly } = useSelectedSpectra(dataset);
   const [search, setSearch] = React.useState("");
   const [viewMode, setViewMode] = React.useState<ViewMode>("processed");
@@ -125,6 +127,9 @@ export const SpectraExplorer: React.FC<SpectraExplorerProps> = ({ dataset, fileN
   );
 
   const [waveWindow, setWaveWindow] = React.useState<[number, number]>([0, 1]);
+  const [prediction, setPrediction] = React.useState<RamanPrediction | null>(null);
+  const [predictionLoading, setPredictionLoading] = React.useState(false);
+  const [predictionError, setPredictionError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!plotRows.length) {
@@ -134,6 +139,43 @@ export const SpectraExplorer: React.FC<SpectraExplorerProps> = ({ dataset, fileN
     setWaveWindow([plotRows[0].wave, plotRows[plotRows.length - 1].wave]);
   }, [plotRows]);
 
+  const selectedSpectrum = orderedSelection[0] ?? null;
+
+  React.useEffect(() => {
+    if (!selectedSpectrum) {
+      setPrediction(null);
+      setPredictionLoading(false);
+      setPredictionError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPredictionLoading(true);
+    setPredictionError(null);
+
+    predictRamanSpectrum(uploadId, selectedSpectrum.key)
+      .then((result) => {
+        if (!cancelled) {
+          setPrediction(result);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPrediction(null);
+          setPredictionError(error instanceof Error ? error.message : "Не удалось классифицировать спектр.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPredictionLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSpectrum, uploadId]);
+
   React.useEffect(() => {
     if (!shouldScrollToChartRef.current || !selectedKey) {
       return;
@@ -142,8 +184,6 @@ export const SpectraExplorer: React.FC<SpectraExplorerProps> = ({ dataset, fileN
     shouldScrollToChartRef.current = false;
     spectrumChartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [selectedKey]);
-
-  const selectedSpectrum = orderedSelection[0] ?? null;
 
   const toggleRegion = React.useCallback((regionId: string, checked: boolean) => {
     setVisibleRegionIds((current) => {
@@ -455,6 +495,12 @@ export const SpectraExplorer: React.FC<SpectraExplorerProps> = ({ dataset, fileN
           </div>
 
           <div ref={spectrumChartRef} className="scroll-mt-24">
+            <RamanPredictionPanel
+              prediction={prediction}
+              loading={predictionLoading}
+              error={predictionError}
+            />
+
             <SpectrumChart
               rows={plotRows}
               selectedSpectra={orderedSelection}
@@ -463,6 +509,12 @@ export const SpectraExplorer: React.FC<SpectraExplorerProps> = ({ dataset, fileN
               showAggregate={showAggregate}
               waveWindow={waveWindow}
               onWaveWindowChange={setWaveWindow}
+              importantRegions={viewMode === "processed" ? prediction?.importantRegions : []}
+              peaks={
+                viewMode === "processed"
+                  ? prediction?.peaks.map((item) => ({ peakNu: item.peakNu, intensity: item.intensity }))
+                  : []
+              }
             />
           </div>
 
