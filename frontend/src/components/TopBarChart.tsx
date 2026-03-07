@@ -18,6 +18,18 @@ interface TopBarChartProps {
   topN?: number;
 }
 
+interface TopChartDatum {
+  rank: number;
+  label: string;
+  probability: number;
+  cls: number;
+}
+
+interface TopChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: TopChartDatum }>;
+}
+
 export const TopBarChart: React.FC<TopBarChartProps> = ({ results, threshold, topN = 20 }) => {
   const data = useMemo(() => {
     return [...results]
@@ -25,18 +37,18 @@ export const TopBarChart: React.FC<TopBarChartProps> = ({ results, threshold, to
       .slice(0, topN)
       .map((r, i) => ({
         rank: i + 1,
-        label: r.label.replace("Spectrum ", "S"),
+        label: r.label.replace("Спектр ", "С"),
         probability: r.probability,
         cls: r.cls,
       }));
   }, [results, topN]);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TopChartTooltipProps) => {
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
     return (
       <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-card">
-        <p className="text-muted-foreground">{d.label} · rank #{d.rank}</p>
+        <p className="text-muted-foreground">{d.label} · место #{d.rank}</p>
         <p className="font-mono font-semibold text-foreground mt-0.5">p = {d.probability.toFixed(4)}</p>
         <p className={d.cls === 1 ? "text-danger mt-0.5" : "text-success mt-0.5"}>
           cls = {d.cls}
@@ -49,8 +61,8 @@ export const TopBarChart: React.FC<TopBarChartProps> = ({ results, threshold, to
     <div className="card-surface rounded-xl p-5">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Top-{topN} Highest Probabilities</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Ranked by descending score</p>
+          <h3 className="text-sm font-semibold text-foreground">Топ-{topN} максимальных вероятностей</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Отсортировано по убыванию скора</p>
         </div>
       </div>
 
@@ -94,4 +106,3 @@ export const TopBarChart: React.FC<TopBarChartProps> = ({ results, threshold, to
     </div>
   );
 };
-

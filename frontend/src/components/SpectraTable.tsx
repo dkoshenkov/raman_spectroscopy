@@ -56,14 +56,14 @@ export const SpectraTable: React.FC<SpectraTableProps> = ({ results }) => {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Detailed Results</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{filtered.length} spectra</p>
+          <h3 className="text-sm font-semibold text-foreground">Подробные результаты</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">{filtered.length} спектров</p>
         </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search…"
+            placeholder="Поиск…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="rounded-md border border-border bg-background pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal/40 w-40"
@@ -76,7 +76,7 @@ export const SpectraTable: React.FC<SpectraTableProps> = ({ results }) => {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              {([["id", "Spectrum ID"], ["probability", "Probability p"], ["cls", "Class"]] as [SortKey, string][]).map(
+              {([["id", "ID спектра"], ["probability", "Вероятность p"], ["cls", "Класс"]] as [SortKey, string][]).map(
                 ([key, label]) => (
                   <th
                     key={key}
@@ -90,7 +90,7 @@ export const SpectraTable: React.FC<SpectraTableProps> = ({ results }) => {
                   </th>
                 )
               )}
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Score Bar</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Шкала скора</th>
             </tr>
           </thead>
           <tbody>
@@ -135,7 +135,7 @@ export const SpectraTable: React.FC<SpectraTableProps> = ({ results }) => {
       {/* Pagination */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-border">
         <span className="text-xs text-muted-foreground">
-          Page {page} of {totalPages}
+          Страница {page} из {totalPages}
         </span>
         <div className="flex gap-1.5">
           <button
@@ -143,18 +143,17 @@ export const SpectraTable: React.FC<SpectraTableProps> = ({ results }) => {
             disabled={page === 1}
             className="rounded border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-teal/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
-            Prev
+            Назад
           </button>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
             className="rounded border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-teal/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
-            Next
+            Вперёд
           </button>
         </div>
       </div>
     </div>
   );
 };
-

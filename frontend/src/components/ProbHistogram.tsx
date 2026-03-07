@@ -18,6 +18,17 @@ interface ProbHistogramProps {
   bins?: number;
 }
 
+interface HistogramDatum {
+  bin: string;
+  count: number;
+  midpoint: number;
+}
+
+interface HistogramTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: HistogramDatum }>;
+}
+
 export const ProbHistogram: React.FC<ProbHistogramProps> = ({ results, threshold, bins = 20 }) => {
   const data = useMemo(() => {
     const counts = Array(bins).fill(0);
@@ -32,7 +43,7 @@ export const ProbHistogram: React.FC<ProbHistogramProps> = ({ results, threshold
     }));
   }, [results, bins]);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: HistogramTooltipProps) => {
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
     return (
@@ -40,7 +51,7 @@ export const ProbHistogram: React.FC<ProbHistogramProps> = ({ results, threshold
         <p className="text-muted-foreground">
           p ∈ [{(d.midpoint - 0.5 / bins).toFixed(2)}, {(d.midpoint + 0.5 / bins).toFixed(2)})
         </p>
-        <p className="font-mono font-semibold text-foreground mt-0.5">{d.count} spectra</p>
+        <p className="font-mono font-semibold text-foreground mt-0.5">{d.count} спектров</p>
       </div>
     );
   };
@@ -49,8 +60,8 @@ export const ProbHistogram: React.FC<ProbHistogramProps> = ({ results, threshold
     <div className="card-surface rounded-xl p-5">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Probability Distribution</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Histogram over all spectra · {bins} bins</p>
+          <h3 className="text-sm font-semibold text-foreground">Распределение вероятностей</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Гистограмма по всем спектрам · {bins} корзин</p>
         </div>
         <div className="flex items-center gap-4 text-xs">
           <span className="flex items-center gap-1.5">
@@ -105,4 +116,3 @@ export const ProbHistogram: React.FC<ProbHistogramProps> = ({ results, threshold
     </div>
   );
 };
-
