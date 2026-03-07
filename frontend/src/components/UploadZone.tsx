@@ -6,8 +6,6 @@ interface UploadZoneProps {
   disabled?: boolean;
 }
 
-const ACCEPTED = ".csv,.txt,.json,.tsv,.dat,.xlsx,.xls,.npy,.mat";
-
 export const UploadZone: React.FC<UploadZoneProps> = ({ onFile, disabled }) => {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,6 +14,10 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFile, disabled }) => {
   const processFile = useCallback(
     (file: File) => {
       setError(null);
+      if (!file.name.toLowerCase().endsWith(".txt")) {
+        setError("Поддерживается только один .txt файл со спектром Raman.");
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = typeof e.target?.result === "string" ? e.target.result : "";
@@ -70,7 +72,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFile, disabled }) => {
       ].join(" ")}
       style={{ minHeight: 200 }}
     >
-      <input ref={inputRef} type="file" accept={ACCEPTED} className="sr-only" onChange={handleChange} />
+      <input ref={inputRef} type="file" accept=".txt,text/plain" className="sr-only" onChange={handleChange} />
 
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-teal/10 border border-teal/30">
         {dragging ? (
@@ -82,10 +84,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFile, disabled }) => {
 
       <div className="text-center">
         <p className="text-base font-medium text-foreground">
-          {dragging ? "Drop your file here" : "Drag & drop your spectrum file"}
+          {dragging ? "Отпустите .txt файл здесь" : "Перетащите сюда Raman .txt файл"}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          or <span className="text-teal font-medium">browse</span> — CSV, TXT, JSON, TSV, DAT and more
+          или <span className="text-teal font-medium">выберите файл</span> — поддерживается один `.txt`
+          c таблицей вида `#Wave #Intensity` или `#X #Y #Wave #Intensity`
         </p>
       </div>
 
@@ -98,4 +101,3 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFile, disabled }) => {
     </div>
   );
 };
-
