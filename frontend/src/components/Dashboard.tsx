@@ -1,125 +1,84 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  RefreshCw,
   ArrowLeft,
-  Download,
-  ShieldAlert,
   FlaskConical,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
 } from "lucide-react";
-import type { FileInfo, SpectrumResult } from "@/lib/mockGenerator";
-import { generateMockResults, applyThreshold } from "@/lib/mockGenerator";
-import { KPICards } from "./KPICards";
-import { ProbHistogram } from "./ProbHistogram";
-import { TopBarChart } from "./TopBarChart";
-import { SpectraTable } from "./SpectraTable";
+import type { FileInfo } from "@/lib/mockGenerator";
+import { SpectraExplorer } from "@/components/spectra/SpectraExplorer";
+import { SingleSpectrumViewer } from "@/components/spectra/SingleSpectrumViewer";
+import {
+  confirmRamanUpload,
+  parseRamanFile,
+  RamanMetadataConfirmPayload,
+  RamanUpload,
+  toSpectraDataset,
+} from "@/lib/raman/api";
+import { RamanMetadataReview } from "@/components/raman/RamanMetadataReview";
 
 interface DashboardProps {
   fileInfo: FileInfo;
   file: File;
-  apiMode: boolean;
-  apiUrl: string;
   onBack: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   fileInfo,
   file,
-  apiMode,
-  apiUrl,
   onBack,
 }) => {
-  const [results, setResults] = useState<SpectrumResult[]>([]);
-  const [threshold, setThreshold] = useState(0.5);
-  const [shuffleSalt, setShuffleSalt] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isApiMode, setIsApiMode] = useState(apiMode);
-
-  // Fetch or generate results
-  const loadResults = useCallback(
-    async (salt: number, useApi: boolean) => {
-      setLoading(true);
-      setError(null);
-      try {
-        if (useApi) {
-          const form = new FormData();
-          form.append("file", file);
-          const res = await fetch(apiUrl, { method: "POST", body: form });
-          if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
-          const json = await res.json();
-          const probs: number[] = json.probabilities ?? json.scores ?? Object.values(json);
-          const mapped: SpectrumResult[] = probs.map((p, i) => ({
-            id: `spectrum-${String(i + 1).padStart(4, "0")}`,
-            label: `Spectrum ${i + 1}`,
-            probability: Math.max(0, Math.min(1, p)),
-            cls: p > threshold ? 1 : 0,
-          }));
-          setResults(mapped);
-        } else {
-          // Small artificial delay to show loading state
-          await new Promise((r) => setTimeout(r, 350));
-          const r = generateMockResults(fileInfo, salt, threshold);
-          setResults(r);
-        }
-      } catch (e: any) {
-        setError(e.message ?? "Unknown error");
-        // Fallback to mock on API failure
-        const r = generateMockResults(fileInfo, salt, threshold);
-        setResults(r);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [file, fileInfo, apiUrl, threshold]
-  );
+  const [ramanUpload, setRamanUpload] = useState<RamanUpload | null>(null);
+  const [ramanLoading, setRamanLoading] = useState(true);
+  const [ramanError, setRamanError] = useState<string | null>(null);
+  const [confirmingMetadata, setConfirmingMetadata] = useState(false);
 
   useEffect(() => {
-    loadResults(shuffleSalt, isApiMode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
 
-  // Recompute cls labels when threshold changes (without re-randomizing)
-  const displayResults = useMemo(
-    () => applyThreshold(results, threshold),
-    [results, threshold]
-  );
+    const loadRamanUpload = async () => {
+      setRamanLoading(true);
+      setRamanError(null);
+      try {
+        const parsed = await parseRamanFile(file);
+        if (!cancelled) {
+          setRamanUpload(parsed);
+        }
+      } catch (e: unknown) {
+        if (!cancelled) {
+          setRamanUpload(null);
+          setRamanError(e instanceof Error ? e.message : "Не удалось разобрать Raman mapping данные.");
+        }
+      } finally {
+        if (!cancelled) {
+          setRamanLoading(false);
+        }
+      }
+    };
 
-  const kpi = useMemo(() => {
-    const n = displayResults.length;
-    const tumorCount = displayResults.filter((r) => r.cls === 1).length;
-    const meanP = n > 0 ? displayResults.reduce((s, r) => s + r.probability, 0) / n : 0;
-    const maxP = n > 0 ? Math.max(...displayResults.map((r) => r.probability)) : 0;
-    return { n, tumorCount, meanP, maxP };
-  }, [displayResults]);
+    loadRamanUpload();
 
-  const handleRegenerate = () => {
-    const next = shuffleSalt + 1;
-    setShuffleSalt(next);
-    loadResults(next, isApiMode);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
-  const handleModeToggle = () => {
-    const next = !isApiMode;
-    setIsApiMode(next);
-    loadResults(shuffleSalt, next);
-  };
+  const spectraDataset = useMemo(() => (ramanUpload ? toSpectraDataset(ramanUpload) : null), [ramanUpload]);
 
-  const handleExportCSV = () => {
-    const header = "id,label,probability,cls\n";
-    const rows = displayResults
-      .map((r) => `${r.id},${r.label},${r.probability.toFixed(6)},${r.cls}`)
-      .join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `deeppick_results_${fileInfo.name.replace(/\.[^.]+$/, "")}_t${threshold.toFixed(2)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleMetadataConfirm = async (payload: RamanMetadataConfirmPayload) => {
+    if (!ramanUpload) {
+      return;
+    }
+    setConfirmingMetadata(true);
+    setRamanError(null);
+    try {
+      const confirmed = await confirmRamanUpload(ramanUpload.uploadId, payload);
+      setRamanUpload(confirmed);
+    } catch (e: unknown) {
+      setRamanError(e instanceof Error ? e.message : "Не удалось подтвердить метаданные Raman.");
+    } finally {
+      setConfirmingMetadata(false);
+    }
   };
 
   return (
@@ -132,7 +91,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Back</span>
+            <span className="hidden sm:inline">Назад</span>
           </button>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -146,133 +105,81 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-sm text-muted-foreground truncate font-mono">{fileInfo.name}</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Mode toggle */}
-            <button
-              onClick={handleModeToggle}
-              className="flex items-center gap-1.5 text-xs rounded-md border border-border px-2.5 py-1.5 hover:border-teal/50 transition-colors"
-            >
-              {isApiMode ? (
-                <><ToggleRight className="h-3.5 w-3.5 text-teal" /><span className="text-teal">API</span></>
-              ) : (
-                <><ToggleLeft className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-muted-foreground">Mock</span></>
-              )}
-            </button>
-
-            {!isApiMode && (
-              <button
-                onClick={handleRegenerate}
-                disabled={loading}
-                className="flex items-center gap-1.5 text-xs rounded-md border border-border px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:border-teal/50 transition-colors disabled:opacity-40"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-                Regenerate
-              </button>
-            )}
-
-            <button
-              onClick={handleExportCSV}
-              disabled={loading || displayResults.length === 0}
-              className="flex items-center gap-1.5 text-xs rounded-md bg-teal/10 border border-teal/30 text-teal px-2.5 py-1.5 hover:bg-teal/20 transition-colors disabled:opacity-40"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export CSV
-            </button>
-          </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6">
-        {/* Threshold slider */}
-        <div className="card-surface rounded-xl px-5 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                  Classification Threshold <span className="text-muted-foreground font-normal">(τ)</span>
-                </label>
-                <span className="font-mono font-bold text-teal text-lg tabular-nums">
-                  {threshold.toFixed(2)}
-                </span>
-              </div>
-              <div className="relative">
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={threshold}
-                  onChange={(e) => setThreshold(parseFloat(e.target.value))}
-                  className="w-full h-2 rounded-full appearance-none cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, hsl(var(--teal)) ${threshold * 100}%, hsl(var(--muted)) ${threshold * 100}%)`,
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground mt-1 font-mono">
-                <span>0.00</span>
-                <span>cls = 1 if p &gt; τ</span>
-                <span>1.00</span>
-              </div>
-            </div>
-          </div>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Рабочая область спектров</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Разбор Raman-файла, подтверждение метаданных и визуализация как карты спектров, так и одиночного спектра.
+          </p>
         </div>
 
-        {/* Loading / Error state */}
-        {loading ? (
+        {ramanLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 className="h-10 w-10 text-teal animate-spin" />
-            <p className="text-muted-foreground text-sm">
-              {isApiMode ? "Sending to API…" : "Generating mock results…"}
-            </p>
+            <p className="text-muted-foreground text-sm">Загружаем `.txt` файл и разбираем Raman-метаданные…</p>
           </div>
         ) : (
           <>
-            {error && (
-              <div className="flex items-start gap-3 rounded-xl border border-amber-warn/30 bg-amber-warn/5 px-5 py-4 text-sm animate-fade-in">
-                <ShieldAlert className="h-4 w-4 text-amber-warn flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-amber-warn">API request failed — showing mock data</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">{error}</p>
-                </div>
+            {ramanError && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4">
+                <p className="text-sm font-medium text-destructive">В Raman-потоке возникла ошибка</p>
+                <p className="mt-1 text-sm text-muted-foreground">{ramanError}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Ожидается один `.txt` файл с таблицей `Wave/Intensity`, либо `X/Y/Wave/Intensity`.
+                </p>
               </div>
             )}
 
-            {/* KPIs */}
-            <div className="animate-fade-in">
-              <KPICards
-                total={kpi.n}
-                tumorCount={kpi.tumorCount}
-                meanP={kpi.meanP}
-                maxP={kpi.maxP}
-                threshold={threshold}
+            {!ramanUpload ? (
+              <div className="rounded-xl border border-border bg-muted/20 px-5 py-4 text-sm text-muted-foreground">
+                Нет доступной сессии загрузки Raman-файла.
+              </div>
+            ) : !ramanUpload.metadata.userConfirmed ? (
+              <RamanMetadataReview
+                metadata={ramanUpload.metadata}
+                fileName={ramanUpload.fileName}
+                canConfirm={Boolean(ramanUpload.ramanMap)}
+                confirming={confirmingMetadata}
+                onConfirm={handleMetadataConfirm}
               />
-            </div>
-
-            {/* Charts row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in">
-              <ProbHistogram results={displayResults} threshold={threshold} />
-              <TopBarChart results={displayResults} threshold={threshold} topN={Math.min(20, displayResults.length)} />
-            </div>
-
-            {/* Table */}
-            <div className="animate-fade-in">
-              <SpectraTable results={displayResults} />
-            </div>
+            ) : ramanUpload.ramanMap?.dataMode === "single_spectrum" && spectraDataset ? (
+              <SingleSpectrumViewer
+                uploadId={ramanUpload.uploadId}
+                dataset={spectraDataset}
+                fileName={ramanUpload.fileName}
+                metadata={ramanUpload.metadata}
+              />
+            ) : spectraDataset ? (
+              <SpectraExplorer
+                uploadId={ramanUpload.uploadId}
+                dataset={spectraDataset}
+                fileName={ramanUpload.fileName}
+                metadata={ramanUpload.metadata}
+              />
+            ) : (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4">
+                <p className="text-sm font-medium text-destructive">Визуализация недоступна</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Файл разобран, но нормализованные спектральные данные для рендера отсутствуют.
+                </p>
+              </div>
+            )}
           </>
         )}
 
-        {/* Disclaimer */}
         <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 px-5 py-4">
           <FlaskConical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
           <p className="text-xs text-muted-foreground leading-relaxed">
-            <strong className="text-foreground">Research disclaimer:</strong> DeepPick is a prototype visualization tool and is{" "}
-            <strong>not a certified medical device</strong>. Outputs must not be used for clinical diagnosis,
-            treatment decisions, or patient management. For investigational and research purposes only.
+            <strong className="text-foreground">Важно:</strong> DeepPick является прототипом инструмента визуализации и{" "}
+            <strong>не является сертифицированным медицинским изделием</strong>. Результаты нельзя использовать
+            для клинической диагностики, принятия решений о лечении или ведения пациента. Только для
+            исследований.
           </p>
         </div>
       </main>
     </div>
   );
 };
-

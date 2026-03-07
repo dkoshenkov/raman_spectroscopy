@@ -13,6 +13,7 @@ COPY backend/pyproject.toml /app/backend/pyproject.toml
 RUN uv sync --project /app/backend --no-dev
 
 COPY backend /app/backend
+COPY ml /app/ml
 COPY scripts/backend /app/scripts/backend
 RUN chmod +x /app/scripts/backend/*.sh
 
