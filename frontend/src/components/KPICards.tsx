@@ -23,28 +23,28 @@ export const KPICards: React.FC<KPICardsProps> = ({ total, tumorCount, meanP, ma
   const items: KPIItem[] = [
     {
       icon: Hash,
-      label: "Total Spectra",
+      label: "Всего спектров",
       value: total.toString(),
-      sub: "samples analyzed",
+      sub: "проанализированных образцов",
     },
     {
       icon: AlertTriangle,
-      label: "Tumor-like (cls=1)",
+      label: "Опухолевые (cls=1)",
       value: tumorCount.toString(),
-      sub: `${tumorPct}% of total · p > ${threshold.toFixed(2)}`,
+      sub: `${tumorPct}% от общего числа · p > ${threshold.toFixed(2)}`,
       highlight: tumorCount > 0,
     },
     {
       icon: TrendingUp,
-      label: "Mean Probability",
+      label: "Средняя вероятность",
       value: meanP.toFixed(4),
-      sub: "population average",
+      sub: "среднее по выборке",
     },
     {
       icon: Maximize2,
-      label: "Max Probability",
+      label: "Максимальная вероятность",
       value: maxP.toFixed(4),
-      sub: "highest score in set",
+      sub: "наибольший скор в наборе",
     },
   ];
 
@@ -86,4 +86,3 @@ export const KPICards: React.FC<KPICardsProps> = ({ total, tumorCount, meanP, ma
     </div>
   );
 };
-

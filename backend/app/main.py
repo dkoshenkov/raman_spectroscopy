@@ -5,7 +5,7 @@ from time import monotonic
 
 from fastapi import FastAPI
 
-from app.api.routes import auth, items, meta, predict_compat
+from app.api.routes import auth, items, meta, predict_compat, raman
 from app.core.config import get_settings
 from app.core.errors import ApiError, api_error_handler
 from app.core.request_id import RequestIdMiddleware
@@ -31,3 +31,4 @@ app.include_router(meta.router)
 app.include_router(auth.router)
 app.include_router(items.router)
 app.include_router(predict_compat.router)
+app.include_router(raman.router)
