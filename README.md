@@ -1,25 +1,23 @@
-# DeepPick MEPhI 2026
+# Raman Spectroscopy
 
-Прототип веб-приложения для загрузки Raman `.txt` файлов, визуализации спектров и ML-классификации отдельных спектров.
+A prototype web application for uploading Raman `.txt` files, visualizing spectra, and performing ML-based classification of individual spectra.
 
-## Запуск
+## Running the App
 
-Нужен только Docker и Docker Compose.
+Only Docker and Docker Compose are required.
 
 ```bash
 docker compose up --build
 ```
 
-После старта откройте в браузере:
+After startup, open in your browser:
 
-```text
 http://localhost:8080
-```
 
-## Что делает приложение
+## Features
 
-- загружает Raman `.txt` файл;
-- разбирает метаданные и структуру спектров;
-- показывает карту спектров или одиночный спектр;
-- прогоняет выбранный спектр через ML-модель;
-- подсвечивает важные участки спектра и ключевые пики.
+- upload Raman `.txt` files;
+- parse metadata and spectrum structure;
+- visualize a spectrum map or a single spectrum;
+- run the selected spectrum through an ML model;
+- highlight important spectral regions and key peaks.
